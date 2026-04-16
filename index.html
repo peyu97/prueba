@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Órdenes Médicas - MediAyuda</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --bg-color: #f4f7f6;
+            --danger-color: #e74c3c;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Layout Principal --- */
+        .app-container {
+            display: flex;
+            flex: 1;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* --- Barra Lateral (Datos Paciente) --- */
+        .sidebar {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        .sidebar h2 {
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #555;
+            font-weight: bold;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+
+        button.btn-clear {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        button.btn-clear:hover { opacity: 0.9; }
+
+        /* --- Área Principal --- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #e0e0e0;
+            position: relative;
+        }
+
+        /* --- Barra de Herramientas Superior --- */
+        .toolbar {
+            background: var(--primary-color);
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .toolbar select {
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .tool-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 5px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .tool-btn:hover { background: rgba(255,255,255,0.3); }
+        .tool-btn.active { background: var(--accent-color); border-color: var(--accent-color); }
+        
+        .print-btn { background-color: #27ae60; font-weight: bold; margin-left: auto;}
+
+        /* --- Lienzo del Documento --- */
+        .document-area {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            cursor: crosshair; /* Default cursor */
+        }
+
+        #document-wrapper {
+            position: relative;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            /* Tamaño inicial referencial, se ajustará con JS */
+            width: 800px; 
+            height: 1000px;
+        }
+
+        #document-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none; /* Click through to wrapper */
+            user-select: none;
+        }
+
+        /* --- Elementos Agregados (Texto y X) --- */
+        .added-element, .cursor-preview {
+            position: absolute;
+            font-family: 'Courier New', Courier, monospace; /* Estilo máquina de escribir */
+            font-weight: bold;
+            color: #000;
+            cursor: grab;
+            user-select: none;
+            white-space: nowrap;
+            font-size: 16px; /* Ajustable */
+            z-index: 5;
+			line-height: 1;      /* Elimina el espacio extra arriba/abajo del texto */
+            padding: 0;          /* Quita cualquier margen interno */
+            pointer-events: auto; /* Para que se puedan borrar/mover */
+            height: 15px;        /* Altura fija igual al tamaño de fuente */
+            width: 15px;         /* Ancho fijo para que sea un cuadrado perfecto */
+            text-align: center;  /* Centra la X en su pequeño cuadradito */
+        }
+.cursor-preview {
+    pointer-events: none !important; 
+}
+        .added-element:hover {
+            outline: 1px dashed #3498db;
+        }
+
+        .is-dragging {
+            cursor: grabbing !important;
+            opacity: 0.7;
+        }
+
+        /* Datos autollenados (son fijos en coordenadas pero editables en sidebar) */
+        .auto-field {
+            position: absolute;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 16px;
+            color: #000;
+            pointer-events: none; /* No se mueven con mouse, solo por config */
+            background: rgba(255, 255, 0, 0.1); /* Ligero resalte en pantalla para verlos */
+        }
+
+        /* --- Footer y Debug --- */
+        footer {
+            background: #222;
+            color: #888;
+            text-align: center;
+            padding: 5px;
+            font-size: 0.8rem;
+        }
+
+        .debug-panel {
+            position: fixed;
+            bottom: 40px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            display: none; /* Oculto por defecto */
+            z-index: 100;
+            border: 1px solid #0f0;
+        }
+
+/* --- Estilos para la Caja de Texto Editable --- */
+.tipo-texto {
+    min-width: 100px;
+    min-height: 30px;
+    width: 250px;           /* Dale un ancho inicial para que no empiece como un punto */
+    height: auto;
+    resize: both;
+    overflow: visible;       /* Para el resize manual, 'hidden' funciona mejor que 'visible' */
+    
+    /* --- ALINEACIÓN --- */
+    text-align: left;       /* Justifica a la izquierda */
+    word-wrap: break-word;  /* Rompe palabras largas si es necesario */
+    
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px dashed #3498db;
+    padding: 5px;
+    user-select: text !important;
+    cursor: text;
+    line-height: 1.2;
+    display: block;         /* Cambiado de inline-block a block para controlar el ancho */
+}
+
+/* Forzar que el manejador de tamaño sea visible */
+.tipo-texto::-webkit-resizer {
+    background-color: #3498db;
+    border: 2px solid white;
+    border-radius: 2px;
+}
+
+.tipo-texto:focus {
+    outline: 2px solid var(--accent-color);
+    background: white;
+    border-style: solid;
+}
+
+@media print {
+    .tipo-texto { border: none !important; background: transparent !important; }
+    .resizer { display: none !important; }
+}
+		
+        /* --- ESTILOS DE IMPRESIÓN --- */
+@media print {
+            /* 1. Configuración de la página física */
+            @page {
+                size: auto;   /* Deja que el navegador detecte el tamaño */
+                margin: 0mm;  /* ¡IMPORTANTE! Elimina márgenes de fecha/hora/url */
+            }
+
+            /* 2. Ocultar todo lo que no es el documento */
+            body { 
+                background: white; 
+                margin: 0; 
+                padding: 0;
+                /* Opcional: Si se corta a la derecha, reduce esta escala a 0.95 */
+                transform: scale(1.0); 
+                transform-origin: top left;
+            }
+
+            .sidebar, .toolbar, footer, .debug-panel, ::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            .app-container { 
+                display: block; 
+                height: auto; 
+                overflow: visible;
+            }
+
+            .main-content { 
+                display: block; 
+                margin: 0; 
+                padding: 0; 
+                background: white;
+            }
+
+            .document-area { 
+                display: block; 
+                padding: 0; 
+                margin: 0; 
+                overflow: visible; 
+            }
+
+            /* 3. EL TRUCO: Forzar el mismo tamaño que en pantalla */
+            #document-wrapper {
+                position: absolute;
+                top: 0;
+                left: 0;
+                /* MANTENER EL MISMO ANCHO QUE EN PANTALLA (800px) 
+                   Esto evita que el texto se mueva respecto a la imagen */
+                width: 800px !important; 
+                height: 1000px !important; 
+                
+                margin: 0 !important;
+                box-shadow: none;
+                border: none;
+                
+                /* Asegura que los colores e imágenes de fondo se impriman */
+                print-color-adjust: exact; 
+                -webkit-print-color-adjust: exact;
+                
+                /* Evita que se genere una segunda página si algo sobra por 1px */
+                overflow: hidden; 
+            }
+
+            /* Quitar bordes de selección al imprimir */
+            .added-element { border: none !important; outline: none !important; }
+            .added-element:hover { outline: none !important; }
+            .auto-field { background: transparent !important; }
+        }
+
+		/* Ocultar bordes de las cajas de texto al imprimir */
+            .tipo-texto {
+                border: none !important;
+                background: transparent !important;
+                resize: none !important;
+                outline: none !important;
+            }
+/* Estilo para la X fantasma (preview) */
+.cursor-preview {
+    position: absolute;
+    font-family: 'Courier New', Courier, monospace; /* Misma fuente que la X real */
+    font-size: 15px; /* Mismo tamaño */
+    color: rgba(0, 0, 255, 0.5); /* Azul semitransparente para diferenciarlo */
+    font-weight: bold;
+    pointer-events: none; /* No interfiere con el clic */
+    z-index: 1000;
+    display: none; /* Oculto por defecto */
+}
+		
+
+        .btn-qr {
+            background-color: #8e44ad;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+            font-weight: bold;
+        }
+        .btn-qr:hover { opacity: 0.95; }
+
+        .qr-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .qr-modal.open { display: flex; }
+
+        .qr-modal-content {
+            width: min(920px, 96vw);
+            max-height: 92vh;
+            overflow: auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            padding: 20px;
+        }
+
+        .qr-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .qr-header h3 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+
+        .qr-close {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #555;
+        }
+
+        .qr-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .qr-tab {
+            border: 1px solid #d0d7de;
+            background: #f7f9fb;
+            color: var(--primary-color);
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .qr-tab.active {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        .qr-panel { display: none; }
+        .qr-panel.active { display: block; }
+
+        .qr-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .qr-card {
+            border: 1px solid #dfe6e9;
+            border-radius: 10px;
+            padding: 15px;
+            background: #fafcfd;
+        }
+
+        .qr-card h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+
+        .qr-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .qr-actions button {
+            border: none;
+            border-radius: 6px;
+            padding: 10px 14px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-primary { background: var(--accent-color); color: white; }
+        .btn-secondary { background: #ecf0f1; color: #2c3e50; }
+        .btn-success { background: #27ae60; color: white; }
+
+        #qr-reader {
+            width: 100%;
+            min-height: 320px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #111;
+        }
+
+        #qr-reader video {
+            border-radius: 8px;
+        }
+
+        #qr-status, #qr-create-status {
+            font-size: 0.88rem;
+            color: #555;
+            margin-top: 8px;
+            min-height: 20px;
+        }
+
+        #qr-output {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 320px;
+            background: white;
+            border-radius: 10px;
+            border: 1px dashed #cfd8dc;
+        }
+
+        #qr-output canvas, #qr-output img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .qr-note {
+            font-size: 0.82rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 820px) {
+            .qr-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media print {
+            .qr-modal { display: none !important; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <label>Formulario:</label>
+        <select id="doc-selector">
+            <option value="orden_lab.jpg" selected>Laboratorio</option>
+            <option value="orden_ic.jpg">Interconsulta</option>
+            <option value="orden_proa.jpg">PROA</option>
+            <option value="orden_rm.jpg">RM</option>
+            <option value="orden_rx_portatil.jpg">RX Portátil</option>
+            <option value="orden_tc.jpg">TAC</option>
+            <option value="orden_us.jpg">US</option>
+	    <option value="orden_eeg.jpg">EEG</option>	
+            <option value="orden_rx.jpg">Radiografías</option>	
+            <option value="orden_cardio.jpg">Ecocardio</option>
+		    <option value="orden_transfusion.jpg">Transfusión</option>
+            <option value="orden_caprini.jpg">Caprini</option>
+        </select>
+
+        <div style="width: 20px; border-left: 1px solid rgba(255,255,255,0.2); height: 20px;"></div>
+
+        <button class="tool-btn active" id="btn-text" onclick="setTool('text')">Texto Libre</button>
+        <button class="tool-btn" id="btn-x" onclick="setTool('x')">☑ Marcar X</button>
+        <button class="tool-btn" id="btn-move" onclick="setTool('move')">✥ Mover</button>
+        <button class="tool-btn" id="btn-erase" onclick="setTool('erase')">⌫ Goma</button>
+<button class="tool-btn" onclick="borrarTodasLasCruces()" style="background: rgba(231, 76, 60, 0.4);">
+            🗑️ Borrar X
+        </button>
+        
+        <button class="tool-btn" id="btn-debug" onclick="toggleDebug()" style="margin-left:auto; font-size: 0.8rem; opacity: 0.7;">Modo Debug</button>
+        <button class="tool-btn print-btn" onclick="window.print()">🖨 IMPRIMIR</button>
+    </div>
+
+    <div class="app-container">
+        <div class="sidebar">
+            <h2>Datos del Paciente</h2>
+            <p style="font-size: 0.8rem; color: #666;">Completa aquí y se llenará en todos los documentos.</p>
+            
+            <div class="form-group">
+                <label>Nombre Paciente</label>
+                <input type="text" id="in-nombre" placeholder="Ej: Juan" oninput="updateAutoFields()">
+            </div>
+            <div class="form-group">
+                <label>Apellidos Paciente</label>
+                <input type="text" id="in-apellidos" placeholder="Ej: Pérez González" oninput="updateAutoFields()">
+            </div>
+
+           <div class="form-group">
+                <label>Edad</label>
+                <input type="text" id="in-edad" placeholder="Ej: 35 años" oninput="updateAutoFields()">
+            </div>
+
+            <div class="form-group">
+                <label>RUT Paciente</label>
+                <input type="text" id="in-rutpaciente" placeholder="12.345.678-9" oninput="updateAutoFields()">
+            </div>
+
+            <div class="form-group">
+                <label>Fecha</label>
+                <input type="date" id="in-fecha" oninput="updateAutoFields()">
+            </div>
+            <div class="form-group">
+                <label>Diagnóstico</label>
+                <textarea id="in-diagnostico" rows="2" placeholder="Ej: Neumonía NAC..." oninput="updateAutoFields()"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Sala / Cama</label>
+                <input type="text" id="in-sala" placeholder="Ej: 304 - B" oninput="updateAutoFields()">
+            </div>
+            <hr>
+            <div class="form-group">
+                <label>Médico (Apellidos, Nombre)</label>
+                <input type="text" id="in-medico" placeholder="Ej: Dr. Errázuriz, Pedro" oninput="updateAutoFields()">
+            </div>
+            <div class="form-group">
+                <label>RUT Médico</label>
+                <input type="text" id="in-rutmedico" placeholder="12.345.678-9" oninput="updateAutoFields()">
+            </div>
+
+            <button class="btn-qr" onclick="openQrModal()">🔐 QR PACIENTE</button>
+            <button class="btn-clear" onclick="clearForm()">LIMPIAR FORMULARIO</button>
+        </div>
+
+        <div class="main-content">
+            <div class="document-area" id="area-trabajo">
+                <div id="document-wrapper">
+                    <img id="document-img" src="" alt="Formulario Médico">
+                    <div id="x-preview" class="cursor-preview">X</div>
+                    <div id="auto-nombre" class="auto-field"></div>
+                    <div id="auto-apellidos" class="auto-field"></div>
+		    <div id="auto-edad" class="auto-field"></div>
+                    <div id="auto-rutpaciente" class="auto-field"></div> <div id="auto-fecha" class="auto-field"></div>
+                    <div id="auto-diagnostico" class="auto-field" style="width: 300px; white-space: normal;"></div>
+                    <div id="auto-sala" class="auto-field"></div>
+                    <div id="auto-medico" class="auto-field"></div>
+                    <div id="auto-rutmedico" class="auto-field"></div>
+
+                    </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="qr-modal" id="qr-modal" aria-hidden="true">
+        <div class="qr-modal-content">
+            <div class="qr-header">
+                <h3>QR Paciente</h3>
+                <button class="qr-close" onclick="closeQrModal()" aria-label="Cerrar">×</button>
+            </div>
+
+            <div class="qr-tabs">
+                <button class="qr-tab active" id="tab-scan" onclick="switchQrTab('scan')">Scanear QR</button>
+                <button class="qr-tab" id="tab-create" onclick="switchQrTab('create')">Crear QR</button>
+            </div>
+
+            <div class="qr-panel active" id="panel-scan">
+                <div class="qr-grid">
+                    <div class="qr-card">
+                        <h4>Escanear con cámara</h4>
+                        <div id="qr-reader"></div>
+                        <div id="qr-status">Listo para iniciar escaneo.</div>
+                        <div class="qr-actions">
+                            <button class="btn-primary" onclick="startQrScanner()">📷 Iniciar cámara</button>
+                            <button class="btn-secondary" onclick="stopQrScanner()">Detener</button>
+                        </div>
+                        <p class="qr-note">Al detectar un QR válido, el programa descifra el contenido y rellena automáticamente nombre, apellidos, RUT, edad y diagnóstico.</p>
+                    </div>
+                    <div class="qr-card">
+                        <h4>Qué datos toma</h4>
+                        <p class="qr-note">Este lector solo acepta QRs generados por este sistema. El contenido viaja cifrado antes de entrar al código QR, para que un lector común no vea los datos en texto plano.</p>
+                        <ul style="margin:10px 0 0 18px; color:#444; font-size:0.92rem; line-height:1.5;">
+                            <li>Nombre</li>
+                            <li>Apellidos</li>
+                            <li>RUT</li>
+                            <li>Edad</li>
+                            <li>Diagnóstico</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qr-panel" id="panel-create">
+                <div class="qr-grid">
+                    <div class="qr-card">
+                        <h4>Generar QR cifrado</h4>
+                        <p class="qr-note">Se crea desde los datos ya escritos en el formulario. Puedes imprimirlo directamente para pegarlo o adjuntarlo a la orden.</p>
+                        <div class="qr-actions">
+                            <button class="btn-primary" onclick="generatePatientQr()">Generar QR</button>
+                            <button class="btn-success" onclick="printQrOnly()">🖨 Imprimir QR</button>
+                        </div>
+                        <div id="qr-create-status">Aún no se ha generado ningún QR.</div>
+                    </div>
+                    <div class="qr-card">
+                        <h4>Vista previa</h4>
+                        <div id="qr-output"><span style="color:#7f8c8d;">Aquí aparecerá el QR</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="debug-panel" id="debug-box">
+        <p>⚠️ MODO DEBUG: SOLO PARA PEYU</p>
+        <p>No tocar si no eres Peyu.</p>
+        <p>X: <span id="db-x">0</span> | Y: <span id="db-y">0</span></p>
+    </div>
+
+    <footer>
+        Hecho con ❤️ por Pedro Errázuriz | @mediayuda_ | Versión 2.3 | Diciembre 2025 - Abril 2026
+    </footer>
+
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+    <script>
+        // --- 1. CONFIGURACIÓN DE COORDENADAS --- 
+        // ¡OJO DOC! Agregué "rutpaciente" a la configuración. 
+        // Tendrás que calibrar su posición en cada orden.
+        
+        const docConfig = {
+            "orden_lab.jpg": { // LABORATORIO (Ahora es el primero)
+                nombre: { top: 140, left: 150 },
+                apellidos: { top: 140, left: 400 },
+                edad:          null,
+                rutpaciente: { top: 160, left: 145 }, 
+                fecha: { top: 50, left: 480 },
+                diagnostico: { top: 185, left: 150 },
+                sala: { top: 70, left: 480 },
+                medico: { top: 950, left: 80 },
+                rutmedico: { top: 950, left: 390 }
+            },
+            "orden_ic.jpg": {
+                nombre: { top: 260, left: 597 },
+                apellidos: { top: 260, left: 149 },
+                edad:         { top: 360, left: 600 }, 
+                rutpaciente: { top: 320, left: 140 }, 
+                fecha: { top: 154, left: 379 },
+                diagnostico: { top: 577, left: 113 },
+                sala: { top: 40, left: 378 },
+                medico: { top: 869, left: 184 },
+                rutmedico: { top: 920, left: 159 }
+            },        
+
+            // PROA
+            "orden_proa.jpg": { 
+                nombre:       { top: 180, left: 230 }, 
+                apellidos:    { top: 180, left: 440 }, 
+                edad:         { top: 200, left: 450 },
+                rutpaciente: { top: 200, left: 230 }, 
+                fecha:        { top: 110, left: 625 }, 
+                diagnostico:  { top: 310, left: 260 }, 
+                sala:         { top: 225, left: 230 },
+                medico:       { top: 800, left: 470 }, 
+                rutmedico:   { top: 820, left: 470 } 
+            },
+
+            // RESONANCIA MAGNÉTICA
+            "orden_rm.jpg": { 
+                nombre:       { top: 100, left: 200 }, 
+                apellidos:    { top: 100, left: 400 }, 
+                edad:         { top: 120, left: 320 },
+                rutpaciente: { top: 120, left: 460 }, 
+                fecha:        { top: 145, left: 170 }, 
+                diagnostico:  { top: 200, left: 90 }, 
+                sala:         { top: 145, left: 600 },
+                medico:       { top: 890, left: 275 }, 
+                rutmedico:   null 
+            },
+
+            // RX PORTÁTIL
+            "orden_rx_portatil.jpg": { 
+                nombre:       { top: 165, left: 200 }, 
+                apellidos:    { top: 165, left: 400 }, 
+                edad:         { top: 185, left: 325 },
+                rutpaciente: { top: 185, left: 480 }, 
+                fecha:        { top: 205, left: 170 }, 
+                diagnostico:  { top: 250, left: 80 }, 
+                sala:         { top: 200, left: 630 },
+                medico:       { top: 570, left: 220 }, 
+                rutmedico:   null 
+            },
+
+            // SCANNER (TC)
+            "orden_tc.jpg": { 
+                nombre:       { top: 90, left: 200 }, 
+                apellidos:    { top: 90, left: 400 }, 
+                edad:         { top: 110, left: 320 }, 
+                rutpaciente: { top: 110, left: 470 }, 
+                fecha:        { top: 130, left: 170 }, 
+                diagnostico:  { top: 180, left: 90 }, 
+                sala:         { top: 130, left: 600 },
+                medico:       { top: 900, left: 275 }, 
+                rutmedico:   null
+            },
+
+            // ECOGRAFÍA (US)
+            "orden_us.jpg": { 
+                nombre:       { top: 100, left: 215 }, 
+                apellidos:    { top: 100, left: 430 }, 
+                edad:         { top: 125, left: 380 }, 
+                rutpaciente: { top: 125, left: 530 }, 
+                fecha:        { top: 170, left: 220 }, 
+                diagnostico:  { top: 215, left: 80 }, 
+                sala:         { top: 150, left: 420 }, 
+                medico:       { top: 855 , left: 220 }, 
+                rutmedico:   null,
+            },
+
+            // EEG
+            "orden_eeg.jpg": { 
+                nombre:       { top: 132, left: 506 }, 
+                apellidos:    { top: 132, left: 79 }, 
+                edad:         { top: 197, left: 611 }, 
+                rutpaciente: { top: 181, left: 187 }, 
+                fecha:        { top: 92, left: 179 }, 
+                diagnostico:  { top: 692, left: 152 }, 
+                sala:         { top: 45, left: 355 }, 
+                medico:       { top:  855, left: 102 }, 
+                rutmedico:   { top:  941, left: 179 } 
+            },
+
+            // Radiografias
+            "orden_rx.jpg": { 
+                nombre:       { top: 94, left: 194 }, 
+                apellidos:    { top: 94, left: 392 }, 
+                edad:         { top: 114, left: 320 }, 
+                rutpaciente: { top: 114, left: 472 }, 
+                fecha:        { top: 133, left: 160 }, 
+                diagnostico:  { top: 178, left: 80 }, 
+                sala:         { top: 134, left: 606 }, 
+                medico:       { top: 894 , left: 285 }, 
+                rutmedico:   null,
+            },
+
+            // ecocardio
+            "orden_cardio.jpg": { 
+                nombre:       { top: 371, left: 262 }, 
+                apellidos:    { top: 371, left: 451 }, 
+                edad:         { top: 441, left: 228 }, 
+                rutpaciente: { top: 407, left: 262 }, 
+                fecha:        { top: 46, left: 597 }, 
+                diagnostico:  { top: 477, left: 287 }, 
+                sala:         { top: 442, left: 391 }, 
+                medico:       { top: 808, left: 427 }, 
+                rutmedico:   null,
+            },
+
+            // caprini
+            "orden_caprini.jpg": { 
+                nombre:       { top: 83, left: 145 }, 
+                apellidos:    { top: 83, left: 384 }, 
+                edad:         { top: 130, left: 145 }, 
+                rutpaciente: { top: 107, left: 145 }, 
+                fecha:        { top: 147, left: 145 }, 
+                diagnostico:  null, 
+                sala:         null, 
+                medico:       { top: 961, left: 490 }, 
+                rutmedico:   null,
+            },
+
+			            "orden_transfusion.jpg": { 
+                nombre:       { top: 259, left: 238 }, 
+                apellidos:    { top: 259, left: 320 }, 
+                edad:         null, 
+                rutpaciente: { top: 278, left: 154 }, 
+                fecha:        { top: 890, left: 214 }, 
+                diagnostico:  { top: 288, left: 297 },
+                sala:         null, 
+                medico:       { top: 961, left: 490 }, 
+                rutmedico:   null,
+            }
+			
+        };
+
+        // --- 2. ESTADO DE LA APLICACIÓN ---
+        let currentTool = 'text'; 
+        let isDragging = false;
+        let dragElement = null;
+        let offsetX, offsetY;
+        let isDebug = false;
+
+        let qrScanner = null;
+        let qrScannerRunning = false;
+        let qrCanvasDataUrl = '';
+        const QR_SECRET_PASSPHRASE = 'mediayuda-qr-clinico-v1::solo-lectura-interna';
+        const QR_PAYLOAD_VERSION = 1;
+
+const savedElements = {
+    "orden_lab.jpg": [],
+    "orden_ic.jpg": [],
+    "orden_proa.jpg": [],
+    "orden_rm.jpg": [],
+    "orden_rx_portatil.jpg": [],
+    "orden_tc.jpg": [],
+    "orden_us.jpg": [],
+    "orden_eeg.jpg": [],
+    "orden_rx.jpg": [],
+    "orden_cardio.jpg": [],
+    "orden_caprini.jpg": [],
+    "orden_transfusion.jpg": []
+};
+
+// Variable para saber cuál era el documento anterior antes de cambiar
+let lastDoc = "orden_lab.jpg";
+		
+
+        function uint8ToBase64Url(bytes) {
+            let binary = '';
+            bytes.forEach(b => binary += String.fromCharCode(b));
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        }
+
+        function base64UrlToUint8(str) {
+            const normalized = str.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+            const binary = atob(padded);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+
+        async function deriveQrKey() {
+            const enc = new TextEncoder();
+            const baseKey = await crypto.subtle.importKey(
+                'raw',
+                enc.encode(QR_SECRET_PASSPHRASE),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+
+            return crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: enc.encode('mediayuda-qr-salt-v1'),
+                    iterations: 150000,
+                    hash: 'SHA-256'
+                },
+                baseKey,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        async function encryptQrPayload(data) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const enc = new TextEncoder();
+            const key = await deriveQrKey();
+            const cipherBuffer = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv },
+                key,
+                enc.encode(JSON.stringify(data))
+            );
+            const cipherBytes = new Uint8Array(cipherBuffer);
+            return `MIA1.${uint8ToBase64Url(iv)}.${uint8ToBase64Url(cipherBytes)}`;
+        }
+
+        async function decryptQrPayload(payload) {
+            if (!payload || typeof payload !== 'string' || !payload.startsWith('MIA1.')) {
+                throw new Error('Formato QR no reconocido.');
+            }
+
+            const parts = payload.split('.');
+            if (parts.length !== 3) throw new Error('QR inválido.');
+
+            const iv = base64UrlToUint8(parts[1]);
+            const cipherBytes = base64UrlToUint8(parts[2]);
+            const key = await deriveQrKey();
+            const plainBuffer = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv },
+                key,
+                cipherBytes
+            );
+            const dec = new TextDecoder();
+            return JSON.parse(dec.decode(plainBuffer));
+        }
+
+        function getPatientQrData() {
+            return {
+                v: QR_PAYLOAD_VERSION,
+                nombre: document.getElementById('in-nombre').value.trim(),
+                apellidos: document.getElementById('in-apellidos').value.trim(),
+                rut: document.getElementById('in-rutpaciente').value.trim(),
+                edad: document.getElementById('in-edad').value.trim(),
+                diagnostico: document.getElementById('in-diagnostico').value.trim(),
+                ts: new Date().toISOString()
+            };
+        }
+
+        function fillFormFromQrData(data) {
+            document.getElementById('in-nombre').value = data.nombre || '';
+            document.getElementById('in-apellidos').value = data.apellidos || '';
+            document.getElementById('in-rutpaciente').value = data.rut || '';
+            document.getElementById('in-edad').value = data.edad || '';
+            document.getElementById('in-diagnostico').value = data.diagnostico || '';
+            updateAutoFields();
+        }
+
+        function openQrModal() {
+            document.getElementById('qr-modal').classList.add('open');
+            document.getElementById('qr-modal').setAttribute('aria-hidden', 'false');
+        }
+
+        async function closeQrModal() {
+            await stopQrScanner();
+            document.getElementById('qr-modal').classList.remove('open');
+            document.getElementById('qr-modal').setAttribute('aria-hidden', 'true');
+        }
+
+        function switchQrTab(tab) {
+            document.getElementById('tab-scan').classList.toggle('active', tab === 'scan');
+            document.getElementById('tab-create').classList.toggle('active', tab === 'create');
+            document.getElementById('panel-scan').classList.toggle('active', tab === 'scan');
+            document.getElementById('panel-create').classList.toggle('active', tab === 'create');
+
+            if (tab !== 'scan') stopQrScanner();
+        }
+
+        async function startQrScanner() {
+            const status = document.getElementById('qr-status');
+
+            if (!window.isSecureContext) {
+                status.textContent = 'La cámara requiere HTTPS o localhost.';
+                return;
+            }
+
+            try {
+                if (!qrScanner) qrScanner = new Html5Qrcode('qr-reader');
+                if (qrScannerRunning) return;
+
+                status.textContent = 'Abriendo cámara...';
+                await qrScanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: { width: 240, height: 240 } },
+                    async (decodedText) => {
+                        try {
+                            const data = await decryptQrPayload(decodedText);
+                            fillFormFromQrData(data);
+                            status.textContent = 'QR leído correctamente. Datos cargados en el formulario.';
+                            await stopQrScanner();
+                            switchQrTab('create');
+                        } catch (err) {
+                            status.textContent = 'Se detectó un QR, pero no pertenece a este sistema o no pudo descifrarse.';
+                        }
+                    },
+                    () => {}
+                );
+                qrScannerRunning = true;
+                status.textContent = 'Cámara activa. Apunta al QR.';
+            } catch (err) {
+                status.textContent = 'No se pudo iniciar la cámara. Revisa permisos del navegador.';
+                console.error(err);
+            }
+        }
+
+        async function stopQrScanner() {
+            const status = document.getElementById('qr-status');
+            try {
+                if (qrScanner && qrScannerRunning) {
+                    await qrScanner.stop();
+                    await qrScanner.clear();
+                    qrScannerRunning = false;
+                    status.textContent = 'Escáner detenido.';
+                }
+            } catch (err) {
+                console.error(err);
+                qrScannerRunning = false;
+            }
+        }
+
+        async function generatePatientQr() {
+            const status = document.getElementById('qr-create-status');
+            const output = document.getElementById('qr-output');
+            const data = getPatientQrData();
+
+            if (!data.nombre && !data.apellidos && !data.rut && !data.edad && !data.diagnostico) {
+                status.textContent = 'Completa al menos un dato antes de generar el QR.';
+                return;
+            }
+
+            try {
+                status.textContent = 'Cifrando datos y generando QR...';
+                const encryptedPayload = await encryptQrPayload(data);
+                output.innerHTML = '';
+                const canvas = document.createElement('canvas');
+                await QRCode.toCanvas(canvas, encryptedPayload, {
+                    width: 280,
+                    margin: 1,
+                    errorCorrectionLevel: 'M'
+                });
+                output.appendChild(canvas);
+                qrCanvasDataUrl = canvas.toDataURL('image/png');
+                status.textContent = 'QR cifrado generado correctamente.';
+            } catch (err) {
+                console.error(err);
+                status.textContent = 'No se pudo generar el QR.';
+            }
+        }
+
+        function printQrOnly() {
+            const status = document.getElementById('qr-create-status');
+            if (!qrCanvasDataUrl) {
+                status.textContent = 'Primero genera el QR.';
+                return;
+            }
+
+            const win = window.open('', '_blank', 'width=500,height=650');
+            if (!win) {
+                status.textContent = 'El navegador bloqueó la ventana de impresión.';
+                return;
+            }
+
+            win.document.write(`
+                <html lang="es">
+                <head>
+                    <title>QR Paciente</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 0; padding: 24px; text-align: center; }
+                        h1 { font-size: 20px; margin-bottom: 18px; }
+                        img { width: 320px; height: 320px; object-fit: contain; }
+                        .meta { margin-top: 14px; font-size: 14px; color: #333; }
+                    </style>
+                </head>
+                <body>
+                    <h1>QR Paciente</h1>
+                    <img src="${qrCanvasDataUrl}" alt="QR Paciente">
+                    <div class="meta">Generado por MediAyuda</div>
+                </body>
+                </html>
+            `);
+            win.document.close();
+            win.focus();
+            setTimeout(() => {
+                win.print();
+            }, 300);
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeQrModal();
+        });
+
+        // Inicialización
+// Inicialización
+// Inicialización
+        window.onload = function() {
+            document.getElementById('in-fecha').valueAsDate = new Date();
+            
+            // --- CÓDIGO NUEVO: LEER URL ---
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            if (urlParams.has('nombre')) {
+                document.getElementById('in-nombre').value = urlParams.get('nombre');
+            }
+            if (urlParams.has('apellidos')) {
+                document.getElementById('in-apellidos').value = urlParams.get('apellidos');
+            }
+            if (urlParams.has('edad')) {
+                document.getElementById('in-edad').value = urlParams.get('edad');
+            }
+            if (urlParams.has('rut_paciente')) {
+                document.getElementById('in-rutpaciente').value = urlParams.get('rut_paciente');
+            }
+            if (urlParams.has('medico')) {
+                document.getElementById('in-medico').value = urlParams.get('medico');
+            }
+            if (urlParams.has('rut_medico')) {
+                document.getElementById('in-rutmedico').value = urlParams.get('rut_medico');
+            }
+            if (urlParams.has('dx_main')) {
+                document.getElementById('in-diagnostico').value = urlParams.get('dx_main');
+            }
+            // ------------------------------
+
+            changeDoc();
+            updateAutoFields();
+        };
+
+        // --- 3. FUNCIONES DE INTERFAZ ---
+        
+        document.getElementById('doc-selector').addEventListener('change', changeDoc);
+
+function changeDoc() {
+    const selector = document.getElementById('doc-selector');
+    const newDoc = selector.value;
+
+    // A. GUARDAR elementos del documento actual antes de salir
+    const currentElements = document.querySelectorAll('.added-element');
+    savedElements[lastDoc] = Array.from(currentElements).map(el => ({
+        html: el.innerHTML,
+        classList: Array.from(el.classList),
+        top: el.style.top,
+        left: el.style.left,
+        width: el.style.width,
+        height: el.style.height,
+        contentEditable: el.contentEditable
+    }));
+
+    // B. LIMPIAR el wrapper de los elementos visuales (pero no los auto-fields)
+    currentElements.forEach(el => el.remove());
+
+    // C. CAMBIAR IMAGEN Y POSICIONES
+    document.getElementById('document-img').src = newDoc;
+    updateAutoFieldsPositions(newDoc);
+
+    // D. RESTAURAR elementos del nuevo documento (si existen)
+    if (savedElements[newDoc]) {
+        savedElements[newDoc].forEach(data => {
+            const el = document.createElement('div');
+            data.classList.forEach(cls => el.classList.add(cls));
+            el.style.top = data.top;
+            el.style.left = data.left;
+            el.style.width = data.width;
+            el.style.height = data.height;
+            el.innerHTML = data.html;
+            el.contentEditable = data.contentEditable;
+
+            // Re-vincular eventos
+            el.addEventListener('mousedown', startDrag);
+            el.addEventListener('click', function(e) {
+                e.stopPropagation(); 
+                if (currentTool === 'erase') el.remove();
+            });
+
+            wrapper.appendChild(el);
+        });
+    }
+
+    // Actualizar referencia
+    lastDoc = newDoc;
+}
+
+        function setTool(tool) {
+            currentTool = tool;
+            const preview = document.getElementById('x-preview');
+			if (preview) preview.style.display = 'none';
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            if(tool !== 'debug') { 
+                let btnId = tool === 'text' ? 'btn-text' : 
+                            tool === 'x' ? 'btn-x' : 
+                            tool === 'move' ? 'btn-move' : 'btn-erase';
+                document.getElementById(btnId).classList.add('active');
+            }
+
+            const wrapper = document.getElementById('document-wrapper');
+            if (tool === 'text') wrapper.style.cursor = 'text';
+            else if (tool === 'x') wrapper.style.cursor = 'crosshair';
+            else if (tool === 'move') wrapper.style.cursor = 'default';
+            else if (tool === 'erase') wrapper.style.cursor = 'not-allowed'; 
+        }
+
+        function toggleDebug() {
+            isDebug = !isDebug;
+            const panel = document.getElementById('debug-box');
+            panel.style.display = isDebug ? 'block' : 'none';
+            const btn = document.getElementById('btn-debug');
+            btn.style.color = isDebug ? '#0f0' : 'white';
+        }
+
+        // --- 4. LÓGICA DEL CANVAS/DOCUMENTO ---
+
+        const wrapper = document.getElementById('document-wrapper');
+
+wrapper.addEventListener('click', function(e) {
+            if (e.target.classList.contains('added-element')) return; 
+            if (currentTool === 'move' || currentTool === 'erase') return;
+
+            const rect = wrapper.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (currentTool === 'text') {
+                // Creamos la caja vacía directamente sin preguntar
+                createElement(x, y, '', 'text');
+            } else if (currentTool === 'x') {
+                createElement(x - 6, y - 8, "X", 'x'); 
+            }
+        });
+
+wrapper.addEventListener('mousemove', function(e) {
+    const rect = wrapper.getBoundingClientRect();
+    // Coordenadas relativas al documento
+    const x = Math.round(e.clientX - rect.left);
+    const y = Math.round(e.clientY - rect.top);
+
+    // Lógica del Preview de la X pura
+    const preview = document.getElementById('x-preview');
+    if (preview) {
+        if (currentTool === 'x') {
+            preview.style.display = 'block';
+            // Usamos los mismos desfases que en createElement para precisión total
+            preview.style.left = (x - 6) + 'px';
+            preview.style.top = (y - 8) + 'px';
+        } else {
+            preview.style.display = 'none';
+        }
+    }
+
+    // Lógica de Debug (solo si está activo)
+    if (isDebug) {
+        const dbX = document.getElementById('db-x');
+        const dbY = document.getElementById('db-y');
+        if (dbX && dbY) {
+            dbX.innerText = x;
+            dbY.innerText = y;
+        }
+    }
+});
+
+// Asegurar que el preview se oculte si el mouse sale del área de trabajo
+wrapper.addEventListener('mouseleave', () => {
+    const preview = document.getElementById('x-preview');
+    if (preview) preview.style.display = 'none';
+});
+
+function createElement(x, y, content, type) {
+    const el = document.createElement('div');
+    el.classList.add('added-element');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    
+    if (type === 'x') {
+        el.innerText = "X";
+        el.classList.add('tipo-cruz');
+        el.style.fontSize = '15px'; 
+        el.style.color = 'blue';
+        el.style.fontWeight = 'bold';
+        el.style.width = '16px';
+        el.style.height = '16px';
+        el.style.display = 'flex';
+        el.style.alignItems = 'center';
+        el.style.justifyContent = 'center';
+    } else if (type === 'text') {
+        el.classList.add('tipo-texto');
+        el.contentEditable = "true";
+        el.innerText = content;
+        
+        // --- LÓGICA PARA EL "COSITO" DE REDIMENSIONAR ---
+        el.addEventListener('mousedown', (e) => {
+            const rect = el.getBoundingClientRect();
+            // Detectamos si el clic fue en la esquina inferior derecha (el resizer)
+            const isResizer = (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20);
+            
+            if (isResizer) {
+                // Si toca el cosito, dejamos que el navegador haga su magia
+                e.stopPropagation();
+            } else if (currentTool === 'text') {
+                // Si hace clic para escribir, no movemos la caja
+                e.stopPropagation();
+            }
+        });
+
+        setTimeout(() => el.focus(), 10);
+    }
+
+    el.addEventListener('mousedown', startDrag);
+    el.addEventListener('click', function(e) {
+        e.stopPropagation(); 
+        if (currentTool === 'erase') {
+            el.remove();
+        }
+    });
+
+    wrapper.appendChild(el);
+}
+
+        // --- 5. LÓGICA DE MOVER (DRAG AND DROP) ---
+
+        function startDrag(e) {
+            if (currentTool !== 'move') return;
+            isDragging = true;
+            dragElement = e.target;
+            
+            const rect = dragElement.getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+
+            dragElement.classList.add('is-dragging');
+        }
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging || !dragElement) return;
+            e.preventDefault();
+
+            const wrapperRect = wrapper.getBoundingClientRect();
+            let newX = e.clientX - wrapperRect.left - offsetX;
+            let newY = e.clientY - wrapperRect.top - offsetY;
+
+            dragElement.style.left = newX + 'px';
+            dragElement.style.top = newY + 'px';
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (isDragging && dragElement) {
+                dragElement.classList.remove('is-dragging');
+                isDragging = false;
+                dragElement = null;
+            }
+        });
+
+        // --- 6. AUTOLLENADO Y FORMULARIO ---
+
+        function updateAutoFields() {
+            document.getElementById('auto-nombre').innerText = document.getElementById('in-nombre').value;
+            document.getElementById('auto-apellidos').innerText = document.getElementById('in-apellidos').value;
+            document.getElementById('auto-edad').innerText = document.getElementById('in-edad').value;
+            document.getElementById('auto-rutpaciente').innerText = document.getElementById('in-rutpaciente').value;
+            
+// --- CÓDIGO NUEVO (Pega esto encima) ---
+let fechaRaw = document.getElementById('in-fecha').value;
+if (fechaRaw) {
+    // La fecha viene como "2025-12-24" (Año-Mes-Día)
+    let partes = fechaRaw.split('-'); 
+    // partes[0] es Año, partes[1] es Mes, partes[2] es Día
+    
+    // Lo reordenamos a Día-Mes-Año
+    document.getElementById('auto-fecha').innerText = `${partes[2]}-${partes[1]}-${partes[0]}`;
+} else {
+    document.getElementById('auto-fecha').innerText = "";
+}
+
+            document.getElementById('auto-diagnostico').innerText = document.getElementById('in-diagnostico').value;
+            document.getElementById('auto-sala').innerText = document.getElementById('in-sala').value;
+            document.getElementById('auto-medico').innerText = document.getElementById('in-medico').value;
+            document.getElementById('auto-rutmedico').innerText = document.getElementById('in-rutmedico').value;
+        }
+
+        function updateAutoFieldsPositions(fileName) {
+            const config = docConfig[fileName];
+            // Ahora incluimos rutpaciente y diferenciamos rutmedico
+            const fields = ['nombre', 'apellidos', 'edad', 'rutpaciente',  'fecha', 'diagnostico', 'sala', 'medico', 'rutmedico'];
+
+            if (!config) {
+                fields.forEach(f => {
+                    const el = document.getElementById('auto-' + f);
+                    if(el) el.style.display = 'none';
+                });
+                return;
+            }
+
+            fields.forEach(field => {
+                const el = document.getElementById('auto-' + field);
+                const coords = config[field];
+
+                if (coords && el) {
+                    el.style.display = 'block';
+                    el.style.top = coords.top + 'px';
+                    el.style.left = coords.left + 'px';
+                } else if (el) {
+                    el.style.display = 'none';
+                }
+            });
+        }
+
+        function clearForm() {
+            if(confirm("¿Estás seguro de limpiar los datos del paciente?")) {
+                document.getElementById('in-nombre').value = "";
+                document.getElementById('in-apellidos').value = "";
+                document.getElementById('in-rutpaciente').value = ""; 
+				document.getElementById('in-edad').value = ""; 
+                document.getElementById('in-diagnostico').value = "";
+                document.getElementById('in-sala').value = "";
+                
+                
+// Limpiar visualmente
+        const added = document.querySelectorAll('.added-element');
+        added.forEach(el => el.remove());
+
+        // Limpiar memoria del doc actual
+        const currentDoc = document.getElementById('doc-selector').value;
+        savedElements[currentDoc] = [];
+				updateAutoFields();
+            }
+        }
+
+function borrarTodasLasCruces() {
+            // Buscamos solo los elementos con la clase que definimos arriba
+            const cruces = document.querySelectorAll('.tipo-cruz');
+
+            if (cruces.length === 0) {
+                alert("No hay cruces para borrar.");
+                return;
+            }
+
+            if (confirm("¿Estás seguro de borrar TODAS las cruces (X)?")) {
+                cruces.forEach(cruz => {
+                    cruz.remove();
+                });
+            }
+        }
+
+    </script>
+</body>
+</html>
