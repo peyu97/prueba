@@ -917,7 +917,7 @@ let lastDoc = "orden_lab.jpg";
                 {
                     name: 'PBKDF2',
                     salt: enc.encode('mediayuda-qr-salt-v1'),
-                    iterations: 150000,
+                    iterations: 10000,
                     hash: 'SHA-256'
                 },
                 baseKey,
@@ -1071,7 +1071,7 @@ let lastDoc = "orden_lab.jpg";
                 await QRCode.toCanvas(canvas, encryptedPayload, {
                     width: 280,
                     margin: 1,
-                    errorCorrectionLevel: 'M'
+                    errorCorrectionLevel: 'L'
                 });
                 output.appendChild(canvas);
                 qrCanvasDataUrl = canvas.toDataURL('image/png');
