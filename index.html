@@ -690,11 +690,11 @@
     </div>
 
     <footer>
-        Hecho con ❤️ por Pedro Errázuriz | @mediayuda_ | Versión 2.3 | Diciembre 2025 - Abril 2026
+        Hecho con ❤️ por Pedro Errázuriz | @mediayuda_ | Versión 3.0 | Diciembre 2025 - Abril 2026
     </footer>
 
-	<!-- PON esta en su lugar -->
-    <script src="https://unpkg.com/qrcode@1.5.4/build/qrcode.min.js"></script>
+	<!-- Librerías QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <script>
@@ -1064,22 +1064,45 @@ let lastDoc = "orden_lab.jpg";
                 return;
             }
 
+            if (typeof QRCode === 'undefined') {
+                status.textContent = 'No cargó la librería qrcodejs.';
+                console.error('QRCode no está definido.');
+                return;
+            }
+
             try {
                 status.textContent = 'Cifrando datos y generando QR...';
                 const encryptedPayload = await encryptQrPayload(data);
                 output.innerHTML = '';
-                const canvas = document.createElement('canvas');
-                await QRCode.toCanvas(canvas, encryptedPayload, {
+
+                const qrContainer = document.createElement('div');
+                qrContainer.id = 'generated-qr-box';
+                output.appendChild(qrContainer);
+
+                new QRCode(qrContainer, {
+                    text: encryptedPayload,
                     width: 280,
-                    margin: 1,
-                    errorCorrectionLevel: 'L'
+                    height: 280,
+                    correctLevel: QRCode.CorrectLevel.L
                 });
-                output.appendChild(canvas);
-                qrCanvasDataUrl = canvas.toDataURL('image/png');
+
+                await new Promise(resolve => setTimeout(resolve, 120));
+
+                const canvas = qrContainer.querySelector('canvas');
+                const img = qrContainer.querySelector('img');
+
+                if (canvas) {
+                    qrCanvasDataUrl = canvas.toDataURL('image/png');
+                } else if (img && img.src) {
+                    qrCanvasDataUrl = img.src;
+                } else {
+                    throw new Error('qrcodejs no generó canvas ni imagen.');
+                }
+
                 status.textContent = 'QR cifrado generado correctamente.';
             } catch (err) {
                 console.error(err);
-                status.textContent = 'No se pudo generar el QR.';
+                status.textContent = 'No se pudo generar el QR con qrcodejs.';
             }
         }
 
